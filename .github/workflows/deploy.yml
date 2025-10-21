@@ -1,39 +1,23 @@
-name: CI/CD Pipeline
+- name: Deploy to AWS EC2 via SSH
+  uses: appleboy/ssh-action@v0.1.7
+  with:
+    host: ${{ secrets.EC2_HOST }}
+    username: ubuntu
+    key: ${{ secrets.EC2_KEY }}
+    script: |
+      # remove old app folder
+      rm -rf /home/ubuntu/app || true
 
-on:
-  push:
-    branches:
-      - main
+      # clone latest code from GitHub
+      git clone https://github.com/${{ github.repository }} /home/ubuntu/app
 
-jobs:
-  build-deploy:
-    runs-on: ubuntu-latest
+      # go inside app folder
+      cd /home/ubuntu/app/app
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      # stop and remove old container
+      docker stop drviki-app || true
+      docker rm drviki-app || true
 
-    - name: Build Docker image
-      run: docker build -t drviki-app .
-
-    - name: Run basic test
-      run: |
-        docker run -d -p 8080:8080 drviki-app
-        sleep 5
-        curl -f http://localhost:8080
-
-    - name: Deploy to AWS EC2 via SSH
-      uses: appleboy/ssh-action@v0.1.7
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ubuntu
-        key: ${{ secrets.EC2_KEY }}
-        script: |
-          docker stop drviki-app || true
-          docker rm drviki-app || true
-          cd /home/ubuntu
-          rm -rf app || true
-          git clone https://github.com/${{ github.repository }} app
-          cd app
-          docker build -t drviki-app .
-          docker run -d -p 8080:8080 --name drviki-app drviki-app
+      # build and run new Docker container
+      docker build -t drviki-app .
+      docker run -d -p 8080:8080 --name drviki-app drviki-app
