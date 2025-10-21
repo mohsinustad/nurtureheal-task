@@ -1,0 +1,39 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build Docker image
+      run: docker build -t drviki-app .
+
+    - name: Run basic test
+      run: |
+        docker run -d -p 8080:8080 drviki-app
+        sleep 5
+        curl -f http://localhost:8080
+
+    - name: Deploy to AWS EC2 via SSH
+      uses: appleboy/ssh-action@v0.1.7
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_KEY }}
+        script: |
+          docker stop drviki-app || true
+          docker rm drviki-app || true
+          cd /home/ubuntu
+          rm -rf app || true
+          git clone https://github.com/${{ github.repository }} app
+          cd app
+          docker build -t drviki-app .
+          docker run -d -p 8080:8080 --name drviki-app drviki-app
